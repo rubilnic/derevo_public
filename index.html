@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="ru"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="doc-title">Prerequisite Tree · Вика — Глобальное масштабирование</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#f0f4f8;color:#1e293b;font-size:13px;overflow-x:auto}
+#page-wrap{min-width:max-content;padding:40px 40px 80px;position:relative}
+h1{text-align:center;font-size:20px;font-weight:800;color:#1e3a5f;margin-bottom:6px}
+.subtitle{text-align:center;font-size:12px;color:#64748b;margin-bottom:20px}
+
+/* === TOOLBAR === */
+.toolbar{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:22px;flex-wrap:wrap}
+.load-btn{background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:7px 18px;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s;display:flex;align-items:center;gap:6px}
+.load-btn:hover{background:#2563eb}
+.load-btn svg{flex-shrink:0}
+.toolbar-hint{font-size:11px;color:#94a3b8}
+.load-status{font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;display:none}
+.load-status.ok{background:#dcfce7;color:#16a34a;display:inline-block}
+.load-status.err{background:#fee2e2;color:#dc2626;display:inline-block}
+
+/* === EMPTY STATE === */
+.empty-state{text-align:center;padding:80px 40px;color:#94a3b8}
+.empty-state .icon{font-size:48px;margin-bottom:16px}
+.empty-state .msg{font-size:16px;font-weight:600;color:#64748b;margin-bottom:8px}
+.empty-state .hint{font-size:12px}
+
+/* === TREE TOPOLOGY === */
+.tree{display:inline-flex;flex-direction:column;align-items:center;margin:0 auto;position:relative;z-index:10}
+.branch{display:flex;flex-direction:column;align-items:center}
+.stem{width:2px;height:14px;background:#a8c4dd;flex-shrink:0}
+.children{display:flex;flex-direction:row;gap:12px;align-items:flex-start;padding:10px 12px;border:1.5px solid #d0dce8;border-radius:10px;background:rgba(255,255,255,.3)}
+.children:has(> .branch:only-child){border:none;padding:0;background:none}
+.children.collapsed{display:none}
+
+/* === COLLAPSE TOGGLE === */
+.collapse-wrap{display:flex;flex-direction:column;align-items:center}
+.collapse-btn{background:#e2e8f0;border:1.5px solid #cbd5e1;border-radius:8px;padding:4px 12px;font-size:10px;font-weight:700;color:#475569;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.collapse-btn:hover{background:#cbd5e1;border-color:#94a3b8}
+.collapse-btn .arrow{display:inline-block;transition:transform .15s;font-size:8px}
+.collapse-btn.is-collapsed .arrow{transform:rotate(0deg)}
+.collapse-btn.is-expanded .arrow{transform:rotate(90deg)}
+.collapsed-summary{width:172px;background:#fff;border:1.5px solid #d0dce8;border-radius:8px;padding:8px 10px;margin-top:2px;display:none}
+.collapsed-summary.visible{display:block}
+.collapsed-item{font-size:10px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 0;border-bottom:1px solid #f1f5f9;line-height:1.4}
+.collapsed-item:last-child{border-bottom:none}
+.collapsed-item .ci-type{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-right:4px}
+.ci-cond{color:#3b82f6}
+.ci-constr{color:#cb2431}
+.ci-dec{color:#22c55e}
+.ci-task{color:#6f42c1}
+.ci-q{color:#b45309}
+.ci-other{color:#64748b}
+
+/* === CARDS === */
+.card{width:172px;display:flex;flex-direction:column;background:#fff;border-radius:10px;border:1.5px solid #d0dce8;cursor:pointer;position:relative;overflow:visible;flex-shrink:0;z-index:5}
+.card-body{padding:9px 10px 6px;min-height:75px;display:flex;flex-direction:column;justify-content:flex-start}
+.node-type{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+.card-text{font-size:11px;line-height:1.45;color:#334155}
+.card-footer{padding:4px 10px 6px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end}
+.status-badge{font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:#e2e8f0;color:#64748b}
+
+/* Node types */
+.n-goal{background:#1e3a5f;border-color:#1e3a5f;color:#fff;width:340px}
+.n-goal .node-type{color:#93c5fd}
+.n-goal .card-text{color:#e2e8f0}
+.n-cond{border-left:4px solid #3b82f6}
+.n-cond .node-type{color:#3b82f6}
+.n-constr{border:1.5px solid #cb2431;background:#fffaf5}
+.n-constr .node-type{color:#cb2431}
+.n-q{border:1.5px solid #eab308;background:#fffef0}
+.n-q .node-type{color:#b45309}
+.n-dec{border:1.5px solid #22c55e;background:#f0fdf4}
+.n-dec .node-type{color:#16a34a}
+.n-task{border:1.5px solid #6f42c1;background:#f9f5ff}
+.n-task .node-type{color:#6f42c1}
+.n-fact{border:1.5px solid #64748b;background:#f8fafc}
+.n-fact .node-type{color:#64748b}
+.n-note{border-left:4px solid #64748b;background:#f8fafc}
+.n-note .node-type{color:#64748b}
+.n-risk{border-left:4px solid #f59e0b;background:#fffbeb}
+.n-risk .node-type{color:#92400e}
+
+/* === GROUPS === */
+/* Группа-контейнер: рамка вокруг горизонтально развернутых ветвей (2+ ребёнка).
+   Для линейных цепочек (1 ребёнок) используется card-group-badge — компактная метка. */
+.group{border:1.5px solid #a8c4dd;border-radius:14px;background:#ebf3fb;padding:28px 16px 18px;position:relative;z-index:1}
+.group-label{position:absolute;top:-12px;left:14px;background:#5b8db8;color:#fff;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 12px;border-radius:20px;z-index:5}
+.group-crit{border-color:#f59e0b88;background:#fef9ee}
+.group-crit .group-label{background:#d97706}
+.group-par{border-color:#8b5cf688;background:#f5f3ff}
+.group-par .group-label{background:#7c3aed}
+.group-bg{border-color:#94a3b888;background:#f1f5f9}
+.group-bg .group-label{background:#64748b}
+.group-accent{border-color:#ec489988;background:#fdf2f8}
+.group-accent .group-label{background:#db2777}
+/* Card-level group badge: compact label when group has single-child chain */
+.card-group-badge{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 10px;border-radius:12px;color:#fff;margin-bottom:4px;background:#5b8db8}
+.card-group-badge.badge-crit{background:#d97706}
+.card-group-badge.badge-par{background:#7c3aed}
+.card-group-badge.badge-bg{background:#64748b}
+.card-group-badge.badge-accent{background:#db2777}
+
+/* === SIDEBAR MODULE v2 ===
+   Sidebar — компактный блок карточек СПРАВА от родительской карточки.
+   Не разрывает основную вертикальную цепочку: sidebar-attach позиционируется
+   абсолютно, не влияя на ширину branch и центрирование stem.
+   Два режима: parallel (параллельные элементы) и chain (последовательная цепочка).
+   Режим определяется автоматически или вручную через JSON.
+   JSON: "sidebar": true  или  "sidebar": { "mode": "parallel"|"chain" }
+*/
+.sidebar-row{position:relative;display:inline-flex;align-items:center}
+.sidebar-attach{position:absolute;top:50%;left:100%;transform:translateY(-50%);display:flex;flex-direction:row;align-items:center;z-index:3;pointer-events:auto}
+.sidebar-connector{width:22px;height:2px;background:#a8c4dd;flex-shrink:0}
+.sidebar-block{position:relative;display:flex;flex-direction:row;align-items:center;border:1.5px solid #a8c4dd;border-radius:12px;padding:14px 16px 14px 12px;background:rgba(255,255,255,.35)}
+/* Group styling on sidebar block */
+.sidebar-block.group{padding-top:28px}
+.sidebar-block .group-label{position:absolute;top:-12px;left:14px}
+/* --- Parallel mode: vertical dashes from top border to each card --- */
+.sidebar-block.sb-parallel{align-items:flex-end;padding-top:32px}
+.sidebar-block.sb-parallel .sb-item{position:relative;display:flex;flex-direction:column;align-items:center}
+.sidebar-block.sb-parallel .sb-item::before{content:'';position:absolute;top:-32px;left:50%;width:0;border-left:2px dashed #a8c4dd;height:32px;z-index:0}
+.sidebar-block.sb-parallel.group .sb-item::before{top:-28px;height:28px}
+.sidebar-block.sb-parallel .sb-item+.sb-item{margin-left:10px}
+/* --- Chain mode: horizontal lines between cards --- */
+.sidebar-block.sb-chain .sb-item{position:relative;display:flex;flex-direction:row;align-items:center}
+.sidebar-block.sb-chain .sb-item+.sb-item::before{content:'';display:inline-block;width:14px;height:2px;background:#a8c4dd;flex-shrink:0}
+.sidebar-block.sb-chain .sb-item:first-child::before{content:'';display:inline-block;width:8px;height:2px;background:#a8c4dd;flex-shrink:0}
+/* Cards inside sidebar are smaller */
+.sidebar-block .card{width:140px}
+.sidebar-block .card .card-body{min-height:52px;padding:6px 8px 4px}
+.sidebar-block .card .node-type{font-size:8px;margin-bottom:2px}
+.sidebar-block .card .card-text{font-size:10px;line-height:1.35}
+/* Recursive sidebar: nested children rendered vertically under parent card */
+.sb-subtree{display:flex;flex-direction:column;align-items:center}
+.sb-subtree .sb-stem{width:1.5px;height:10px;background:#a8c4dd;flex-shrink:0}
+.sb-subtree .sb-children{display:flex;flex-direction:row;gap:6px;align-items:flex-start;padding:6px 8px;border:1px solid #d0dce8;border-radius:8px;background:rgba(255,255,255,.25)}
+.sb-subtree .sb-children:has(> .sb-subtree:only-child){border:none;padding:0;background:none}
+
+/* === CLICKABILITY INDICATOR: dog-ear corner fold === */
+.card:has(.popup-box){overflow:hidden}
+.card:has(.popup-box)::before{content:'';position:absolute;bottom:0;right:0;width:22px;height:22px;background:linear-gradient(135deg,transparent 50%,#f59e0b 50%);border-radius:0 0 9px 0;transition:all .2s ease;z-index:6}
+.card:has(.popup-box)::after{content:'\24D8';position:absolute;bottom:1px;right:2px;font-size:10px;font-weight:700;color:#fff;z-index:7;transition:all .2s ease;line-height:1}
+.card:has(.popup-box):hover::before{width:30px;height:30px;background:linear-gradient(135deg,transparent 50%,#ea580c 50%)}
+.card:has(.popup-box):hover::after{font-size:14px;bottom:2px;right:3px}
+.card.hide-info-icon::before,.card.hide-info-icon::after{display:none !important}
+
+/* === POPUP === */
+.popup-box{display:none !important}
+#popup-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;background:rgba(0,0,0,.08);pointer-events:none}
+#popup-overlay.visible{display:block}
+#popup-overlay .popup-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:auto}
+#popup-overlay .popup-clone{position:fixed;pointer-events:auto;background:#fff;border:2px solid #3b82f6;border-radius:14px;box-shadow:0 12px 48px rgba(0,0,0,.3),0 0 0 4px rgba(59,130,246,.15);padding:16px 18px;width:min(440px,calc(100vw - 40px));max-height:calc(100vh - 40px);overflow-y:auto;font-size:12px;color:#1e293b;line-height:1.7}
+#popup-overlay .popup-clone .popup-title{font-size:13px;font-weight:800;color:#1e3a5f;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #e2e8f0}
+#popup-overlay .popup-clone .popup-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:2px}
+#popup-overlay .popup-clone .popup-quote{font-style:italic;color:#475569;border-left:3px solid #cbd5e1;padding-left:10px;margin:6px 0}
+#popup-overlay .popup-clone .p-sec{margin-bottom:8px}
+#popup-overlay .popup-clone .p-sec strong{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:2px}
+
+/* === TASK BOARD === */
+.task-board{max-width:820px;margin:40px auto 0;background:#fff;border-radius:14px;border:1.5px solid #d0dce8;padding:20px 24px;z-index:0;position:relative}
+.task-board h2{font-size:15px;font-weight:800;color:#1e3a5f;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #e2e8f0}
+.task-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;position:relative}
+.task-item:last-child{border-bottom:none}
+.task-check{flex-shrink:0;display:flex;align-items:center}
+.task-checkbox{width:16px;height:16px;cursor:pointer}
+.task-assignee{font-size:11px;font-weight:700;color:#7c3aed;white-space:nowrap;flex-shrink:0}
+.task-text{font-size:12px;color:#334155;cursor:pointer;text-decoration:underline dotted #94a3b8}
+.task-text:hover{color:#3b82f6}
+.task-item input:checked ~ .task-text{text-decoration:line-through;color:#94a3b8}
+.task-item input:checked ~ .task-assignee{opacity:.5}
+.task-popup{display:none !important}
+
+/* === LEGEND === */
+.legend{display:flex;gap:14px;justify-content:center;margin-bottom:24px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:600;color:#64748b}
+.legend-swatch{width:14px;height:14px;border-radius:4px;border:1.5px solid}
+.sw-goal{background:#1e3a5f;border-color:#1e3a5f}
+.sw-cond{background:#fff;border-color:#3b82f6;border-left:3px solid #3b82f6}
+.sw-constr{background:#fffaf5;border-color:#cb2431}
+.sw-q{background:#fffef0;border-color:#eab308}
+.sw-dec{background:#f0fdf4;border-color:#22c55e}
+.sw-task{background:#f9f5ff;border-color:#6f42c1}
+</style>
+</head>
+<body>
+<div id="page-wrap">
+
+  <h1 id="page-title">Prerequisite Tree · Вика — Глобальное масштабирование</h1>
+  <p class="subtitle" id="page-subtitle">Стратегия выхода на глобальный рынок AI-сервисов · Источник: монолог Дениса (04.2026) · v4.0 · 2026-04-10</p>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <button class="load-btn" id="load-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+      Загрузить данные из файла
+    </button>
+    <input type="file" id="file-input" accept=".md,.json,.txt" style="display:none">
+    <button class="load-btn" id="collapse-all-btn" style="background: rgb(100, 116, 139); display: none;" data-state="expanded">⊟ Свернуть все ветки</button>
+    <button class="load-btn" id="save-btn" style="background: rgb(22, 163, 74); display: none;">
+      Сохранить HTML
+    </button>
+    <span class="toolbar-hint">Выберите tree_[имя]_data.md</span>
+    <span class="load-status" id="load-status">✓ Загружено: tree_vika_enriched_data.md</span>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend" id="legend-root"></div>
+
+  <!-- TREE -->
+  <div class="tree" id="tree-root"></div>
+
+  <!-- TASK BOARD -->
+  <div id="taskboard-root"></div>
+
+</div>
+
+<div id="popup-overlay" class=""></div>
+
+<!-- ============================================================ -->
+<!-- ДАННЫЕ ДЕРЕВА (JSON) — ПУСТОЙ БЛОК                           -->
+<!-- При загрузке из файла данные записываются сюда автоматически  -->
+<!-- ============================================================ -->
+<script type="application/json" id="tree-data">{
+  "meta": {
+    "title": "Prerequisite Tree · Вика — Глобальное масштабирование",
+    "subtitle": "Стратегия выхода на глобальный рынок AI-сервисов · Источник: монолог Дениса (04.2026)",
+    "version": "4.0",
+    "date": "2026-04-10"
+  },
+  "tree": {
+    "id": "GOAL",
+    "type": "goal",
+    "text": "Вика работает на растущем глобальном рынке AI-сервисов, доход масштабируется за пределы 1-2 млн руб/мес",
+    "group": null,
+    "popup": {
+      "title": "Цель: Глобальный рынок AI-сервисов",
+      "sections": [
+        {
+          "label": "Суть",
+          "content": "Стратегическая цель — перенести уникальные AI-навыки Вики с умирающего локального рынка на бесконечный глобальный, масштабировав доход за пределы текущих 1-2 млн руб/мес."
+        },
+        {
+          "label": "Описание",
+          "content": "Текущий бизнес Вики стагнирует: банки скупают каналы привлечения (Авито, Яндекс), конкуренция за клиентов растёт, потолок рынка виден. При этом Вика обладает уникальной комбинацией: действующий бизнес для тестирования + продвинутые AI-навыки (серверы, ERP, агенты). Денис оценивает её в топ-0.001% по перспективности — «не видел более правильной стратегии». У неё есть примерно год форы перед конкурентами по AI-навыкам. Она успела оттестировать всё на реальной операционке, которая себя окупала. Ключевой навык ближайших 5-10 лет — управление AI-агентами — у неё уже есть. Глобальный рынок в 100-1000 раз больше российского."
+        },
+        {
+          "label": "Прямая речь",
+          "quotes": [
+            "«У тебя 0,001% людей у перспективных попадающих прямо на супер-супер-что-то супер-амбициозное замахнуться»",
+            "«Вот этот вот страх, который у 95% все ещё населения есть, это управлять AI-шками, агентами — вот это ключевой навык вообще, который человека сделает успешным, либо неуспешным в ближайшие 5-10 лет»",
+            "«Скиллы, которые ты применяешь на очень узкий рынок, который непонятно когда закончится, но вот он заканчивается. Ну это как бы нецелесообразно все то же самое делать только сразу же на рынок, который бесконечный»",
+            "«Ты это поработал прямо очень хорошо на этом бизнесе, который у тебя задыхался, стагнировал, но ты успела идеально правильную стратегию сделать и на нем оттестировать»"
+          ]
+        }
+      ]
+    },
+    "children": [
+      {
+        "id": "L1-1",
+        "type": "condition",
+        "text": "Выбран конкретный проект/ниша для глобального рынка",
+        "group": {
+          "label": "Ниша",
+          "color": "crit"
+        },
+        "popup": {
+          "title": "Условие: Выбор ниши для глобального рынка",
+          "sections": [
+            {
+              "label": "Суть",
+              "content": "Ключевое условие — определиться с конкретной нишей до масштабирования. Без проекта невозможно ни партнёрство, ни осмысленный переезд."
+            },
+            {
+              "label": "Описание",
+              "content": "Денис подчёркивает, что пока нет конкретного проекта, невозможно ни войти в партнёрство, ни сделать переезд осмысленным. Нужно протестировать 2-3 гипотезы до октября из Москвы. Рассматриваются три направления: испаноязычный рынок (может быть больше чисто английского), AI-сервисы для бизнеса (продажа «спасательных кругов» тем, кто не умеет управлять агентами), суверенный AI в России (сервисы для тех, кому закрыт доступ к западным нейросетям). Денис настаивает: «запланируй себе, что ты до октября точно здесь и прорабатываешь рынок». Бесконечность рынка может быть в двух разрезах: даже в России рынок условно бесконечный (не хватит дыхалки его забрать), либо глобальный рынок x1000."
+            },
+            {
+              "label": "Прямая речь",
+              "quotes": [
+                "«Запланируй себе, что ты там действительно до октября точно здесь и прорабатываешь рынок желательно глобальный»",
+                "«Испано-говорящие — там, может, ещё больше рынок»",
+                "«Бесконечность здесь может быть в двух разрезах. Либо это бесконечность в режиме, что даже в России он условно бесконечный, что у тебя не хватит дыхалки его весь забрать»"
+              ]
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "B1-1",
+            "type": "constraint",
+            "text": "Нет ясности, в какую нишу идти — гипотезы не протестированы",
+            "group": null,
+            "popup": {
+              "title": "Блокер: Гипотезы ниш не проверены рынком",
+              "sections": [
+                {
+                  "label": "Суть",
+                  "content": "Три направления (испаноязычный рынок, AI для бизнеса, суверенный AI в РФ) — все на уровне идей. Ни одно не проверено рынком."
+                },
+                {
+                  "label": "Описание",
+                  "content": "Денис перечисляет несколько возможных ниш, но ни одна не протестирована. Испаноязычный рынок — потенциально больше чисто английского, потому что контент Вики мог бы зайти туда лучше. AI для бизнеса — «люди будут, когда они очнутся, что им пизда, побегут учиться у кого-то похожего на тебя». Суверенный AI — «куча всяких систем, которые просто повторяют то, что на Западе, потому что здесь закрыто». При этом рынок Wallbuy, о котором Вике говорили «ребята», действительно бесконечный. Но нужно до октября оставаться в Москве и прорабатывать гипотезы из привычных условий, не распыляясь на переезд."
+                },
+                {
+                  "label": "Прямая речь",
+                  "quotes": [
+                    "«Испано-говорящие — там, может, ещё больше рынок»",
+                    "«Люди будут, когда они очнутся, что им пизда. Вот. Они побегут учиться у кого-то похожего на тебя»",
+                    "«Куча всяких систем, которые просто повторяют то, что на Западе, потому что здесь закрыто. И это тоже огромные возможности»"
+                  ]
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "Q1-1",
+                "type": "question",
+                "text": "Какой рынок выбрать — испаноязычный, AI для бизнеса, суверенный AI?",
+                "group": null,
+                "popup": null,
+                "hide_info_icon": true,
+                "children": [
+                  {
+                    "id": "D1-1",
+                    "type": "decision",
+                    "text": "До октября тестировать гипотезы из Москвы в комфортных условиях",
+                    "group": null,
+                    "popup": {
+                      "title": "Решение: Тестировать из Москвы до октября",
+                      "sections": [
+                        {
+                          "label": "Суть",
+                          "content": "Остаться в привычных условиях Москвы и до октября спокойно тестировать гипотезы ниш, не отвлекаясь на переезд."
+                        },
+                        {
+                          "label": "Описание",
+                          "content": "Денис формулирует чёткий план: оставаться в Москве до октября и прорабатывать рынок — желательно глобальный, нероссийский. Ключевой аргумент: все гипотезы цифровые, они прорабатываются из любой точки. Находиться в привычных, комфортных условиях — значит не сжигать ресурсы на адаптацию. Переезд — только после выбора ниши и первых результатов. «Кажется, что лучше остаться в привычных, комфортных условиях, которые тебя не отвлекают». Потом — три месяца отдыха (не релокация), затем вернуться в Москву и принять решение."
+                        },
+                        {
+                          "label": "Прямая речь",
+                          "quotes": [
+                            "«Запланируй себе, что ты там действительно до октября точно здесь и прорабатываешь рынок желательно глобальный»",
+                            "«Кажется, что лучше остаться в привычных, понятно, комфортных условиях, которые тебя не отвлекают»",
+                            "«Начиная с России, все равно это все цифровое и лишнее будет»"
+                          ]
+                        }
+                      ]
+                    },
+                    "children": []
+                  },
+                  {
+                    "id": "T1-1",
+                    "type": "task",
+                    "text": "Проработать 2-3 гипотезы ниш",
+                    "assignee": "Вика",
+                    "group": null,
+                    "popup": null,
+                    "hide_info_icon": true,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "B1-2",
+            "type": "constraint",
+            "text": "Соблазн распылиться на переезд/английский вместо фокуса",
+            "group": null,
+            "popup": {
+              "title": "Блокер: Ложные приоритеты вместо фокуса на нише",
+              "sections": [
+                {
+                  "label": "Суть",
+                  "content": "Вика рискует потерять фокус, переключившись на переезд в Гонконг или изучение английского — обе активности сжигают ресурсы без приближения к цели."
+                },
+                {
+                  "label": "Описание",
+                  "content": "Денис явно проводит параллель между двумя ложными приоритетами: переезд в Гонконг сожжёт минимум 50% внутреннего ресурса на адаптацию, а изучение английского для блогерства — тупиковое направление, потому что «ты всё равно нормально ни за полгода, ни за год, ни за два не научишься нативно». Оба направления создают иллюзию прогресса, но не приближают к выбору ниши. Денис сравнивает это с тем, чтобы «сидеть и всё равно работать дома, а не по встречам где-то в Гонконге». Энергию нужно направить на тестирование гипотез, а не на логистику переезда или зубрёжку языка."
+                },
+                {
+                  "label": "Прямая речь",
+                  "quotes": [
+                    "«Переезд в Гонконг или в любую другую точку, чтобы там подумать, чем заниматься, ты сожжёшь силы, внутренний ресурс не меньше 50%»",
+                    "«Точно английский тебе не надо учить. Учить для блогерства — это точно тупиковое»",
+                    "«Сидеть и всё равно работать дома, а не по встречам где-то в Гонконге»"
+                  ]
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "D1-2",
+                "type": "decision",
+                "text": "Переезд и английский — ложные приоритеты на данном этапе",
+                "group": null,
+                "popup": null,
+                "hide_info_icon": true,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L1-2",
+        "type": "condition",
+        "text": "AI-навыки Вики применены к бесконечному рынку (не к узкому локальному)",
+        "group": {
+          "label": "Навыки",
+          "color": null
+        },
+        "popup": {
+          "title": "Условие: Перенос навыков на бесконечный рынок",
+          "sections": [
+            {
+              "label": "Суть",
+              "content": "Те же AI-скиллы, отточенные на локальном бизнесе, нужно перенести на рынок, который в 1000 раз больше."
+            },
+            {
+              "label": "Описание",
+              "content": "Денис подчёркивает, что Вика уже обладает самым ключевым навыком ближайших 5-10 лет — управление AI-агентами. Она оттестировала этот навык на реальном бизнесе, который стагнировал, но при этом окупался и служил идеальной песочницей. Проблема в том, что эти скиллы применяются на «очень узкий рынок, который непонятно когда закончится, но вот он заканчивается». Денис видит это как нецелесообразное расходование уникального преимущества. Решение — «всё то же самое делать только сразу же на рынок, который бесконечный». Глобальный рынок x1000 от российского. При этом у Вики нет типичной проблемы стартаперов: у неё есть и действующий бизнес, и AI-навыки — комбинация, которую Денис оценивает как 0.001% населения."
+            },
+            {
+              "label": "Прямая речь",
+              "quotes": [
+                "«Скиллы, которые ты применяешь на очень узкий рынок, который непонятно когда закончится, но вот он заканчивается. Ну это как бы нецелесообразно все то же самое делать только сразу же на рынок, который бесконечный»",
+                "«Ты это поработал прямо очень хорошо на этом бизнесе, который у тебя задыхался, стагнировал, но ты успела идеально правильную стратегию сделать и на нем оттестировать»",
+                "«У тебя вообще но вот я не видел более, наверное, правильной стратегии, чем у тебя»"
+              ]
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "B2-1",
+            "type": "constraint",
+            "text": "Навыки заточены под умирающий локальный рынок",
+            "group": null,
+            "popup": {
+              "title": "Блокер: AI-навыки работают на умирающий рынок",
+              "sections": [
+                {
+                  "label": "Суть",
+                  "content": "Накопленные AI-скиллы тратятся на рынок с видимым потолком, вместо того чтобы работать на бесконечную аудиторию."
+                },
+                {
+                  "label": "Описание",
+                  "content": "Вика вложила огромные усилия в освоение AI: серверы, ERP, агенты, скиллы. Но всё это применяется на рынке, который стагнирует. Банки скупают Авито и Яндекс, конкуренция за клиентов растёт, потолок рынка виден. Денис описывает это как «очень узкий рынок, который непонятно когда закончится, но вот он заканчивается». У Вики есть действующий бизнес — это плюс, потому что навыки оттестированы на реальной операционке. Но продолжать применять их только на этот рынок — «нецелесообразно». Правильная стратегия — перенести ровно те же скиллы на рынок x1000."
+                },
+                {
+                  "label": "Прямая речь",
+                  "quotes": [
+                    "«Скиллы, которые ты применяешь на очень узкий рынок, который непонятно когда закончится, но вот он заканчивается»",
+                    "«У тебя как бы, ну, ты точно придумаешь, как выкрутиться, даже находясь в России»",
+                    "«У тебя там явно потолок, даже вот когда ты не говорила, что у тебя кризис, что там точно потолок он есть, настанет»"
+                  ]
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "D2-1",
+                "type": "decision",
+                "text": "Те же скиллы перенести на рынок x1000 (глобальный)",
+                "group": null,
+                "popup": {
+                  "title": "Решение: Перенос скиллов на глобальный рынок",
+                  "sections": [
+                    {
+                      "label": "Суть",
+                      "content": "Не переучиваться, а перенести ровно те же AI-навыки на глобальный рынок, который в 1000 раз больше."
+                    },
+                    {
+                      "label": "Описание",
+                      "content": "Стратегия проста: всё, чему Вика научилась на локальном рынке, применить к глобальной аудитории. Не нужно осваивать новые навыки — нужно найти рынок, где существующие навыки дадут максимальную отдачу. Денис обращает внимание на два разреза «бесконечности»: даже в России рынок AI-сервисов может быть условно бесконечным (не хватит дыхалки забрать), либо можно выйти на мировой рынок, где x1000 масштаб. Любой продукт, который делается точно так же, на глобальном рынке будет стоить x100 — x1000 от российского. Конкуренты потратят год, чтобы дойти до уровня Вики по AI-навыкам."
+                    },
+                    {
+                      "label": "Прямая речь",
+                      "quotes": [
+                        "«Всё то же самое делать только сразу же на рынок, который бесконечный. Это гораздо правильнее стратегии»",
+                        "«Мир, который действительно там любой продукт точно такой же, он x1000, x100 от того, что в России он будет стоить»",
+                        "«Больше ставку сделать, если ты действительно в себе амбиции чувствуешь дальше прокачаться»"
+                      ]
+                    }
+                  ]
+                },
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "B2-2",
+            "type": "constraint",
+            "text": "Конкуренция за клиентов растёт — банки скупают каналы",
+            "group": null,
+            "popup": {
+              "title": "Блокер: Каналы привлечения скупаются банками",
+              "sections": [
+                {
+                  "label": "Суть",
+                  "content": "Банки скупают Авито и Яндекс, конкуренция за клиентов удорожается, стоимость привлечения улетает в космос."
+                },
+                {
+                  "label": "Описание",
+                  "content": "Денис задаёт прямые вопросы о структуре проблемы: банки не дебилы, они переплатят за каналы, и это значит, что за клиентов «ещё сильнее и дороже будут биться». Стоимость привлечения «вообще в космос улетит». Это не абстрактная угроза — это уже происходит. Текущий рынок Вики задыхается именно по этой причине. Денис не видит это как трагедию — он видит как сигнал к переключению: «чем хуже всем остальным, тем лучше тебе, пока ты в России». Рынок не просто стагнирует — он переходит в фазу, где конкурентное преимущество Вики по AI-навыкам становится самым ценным ресурсом, но применять его на этом рынке уже неэффективно."
+                },
+                {
+                  "label": "Прямая речь",
+                  "quotes": [
+                    "«Банки же, они авито-яндекс не купят, а в авито-яндексе банки тоже не дебилы. Они это переплатят»",
+                    "«А это не значит, что за клиентов ещё сильнее и дороже будут биться? И что стоимость вообще в космос улетит?»",
+                    "«Чем хуже всем остальным, тем лучше тебе, пока ты в России»"
+                  ]
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "F2-1",
+                "type": "fact",
+                "text": "Стоимость привлечения улетает в космос, потолок рынка виден",
+                "group": null,
+                "popup": null,
+                "hide_info_icon": true,
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "B2-3",
+            "type": "constraint",
+            "text": "Окно форы ~1 год — потом конкуренты догонят по AI-навыкам",
+            "group": null,
+            "popup": {
+              "title": "Блокер: Окно конкурентного преимущества — 1 год",
+              "sections": [
+                {
+                  "label": "Суть",
+                  "content": "У Вики запас год по AI-навыкам. Конкуренты догонят. Нужно использовать это окно для захвата позиции."
+                },
+                {
+                  "label": "Описание",
+                  "content": "Денис оценивает фору Вики примерно в год. Он предлагает мысленный эксперимент: «Представь какого-нибудь чувака, которого ты знаешь, на твой уровень уверенности, по умению управлять агентами, делать себе какие-то скиллы и вот это все. Год, скорее всего, а возможно больше, чем год». Ключевой навык — управление AI-агентами — есть у Вики на уровне лучше, чем у 95% населения и чем у 90% предпринимателей. Но этот навык быстро демократизируется. Через год конкуренты начнут осваивать то же самое. Поэтому окно нужно использовать сейчас, а не сжигать его на переезд или изучение языков."
+                },
+                {
+                  "label": "Прямая речь",
+                  "quotes": [
+                    "«У тебя запас в год примерно. Представь какого-нибудь чувака, которого ты знаешь, на твой уровень уверенности, по умению управлять агентами»",
+                    "«Ну год, скорее всего, а возможно больше, чем год»",
+                    "«Ну и точно лучше, чем у 95% населения и чем у 90% предпринимателей либо топ-руководителей»"
+                  ]
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "T2-1",
+                "type": "task",
+                "text": "Использовать год форы для захвата позиции на новом рынке",
+                "assignee": "Вика",
+                "group": null,
+                "popup": null,
+                "hide_info_icon": true,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L1-3",
+        "type": "condition",
+        "text": "Партнёрство с Денисом как кофаундером определено",
+        "group": {
+          "label": "Партнёрство",
+          "color": "accent"
+        },
+        "popup": {
+          "title": "Условие: Партнёрство с Денисом",
+          "sections": [
+            {
+              "label": "Суть",
+              "content": "Денис предлагает себя как микро-младшего партнёра, но ждёт от Вики выбора конкретного проекта."
+            },
+            {
+              "label": "Описание",
+              "content": "Денис прямо говорит, что готов помочь, подсказать, сделать что-то совместное. Но для этого Вике нужно: (1) выбрать конкретный проект, (2) почувствовать уверенность в глобальном рынке, (3) сформулировать предварительное решение о формате партнёрства. Он оценивает её перспективы высоко: «у тебя будет и хорошая идея, и стратегия, и партнёр, и ещё что-то. Ты это сделаешь». Но без конкретики — Денис не может войти. Формат: он готов быть «даже в роли микромладшего». Однако самоуверенность Вики пока «пограничная» — в России она готова «всех порвать», но по глобальному рынку уверенности пока недостаточно."
+            },
+            {
+              "label": "Прямая речь",
+              "quotes": [
+                "«Если захочешь, можешь продолжать со мной советоваться, я бы с удовольствием тебе помог, что-то совместное с тобой сделал, даже в роли микромладшего»",
+                "«У тебя будет и хорошая идея, и стратегия, и партнёр, и ещё что-то. Ты это сделаешь»",
+                "«Но здесь самоуверенность нужна. У тебя пока она немножко такая… пограничная»"
+              ]
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "B3-1",
+            "type": "constraint",
+            "text": "Нет выбранного проекта — Денис не может войти без конкретики",
+            "group": null,
+            "popup": {
+              "title": "Блокер: Без выбранного проекта партнёрство невозможно",
+              "sections": [
+                {
+                  "label": "Суть",
+                  "content": "Денис готов войти партнёром, но только под конкретный проект. Без выбора ниши — входить не во что."
+                },
+                {
+                  "label": "Описание",
+                  "content": "Денис очень чётко формулирует зависимость: партнёрство возможно только после того, как Вика выберет проект. Он не может войти «в абстракцию». Его предложение конкретно: роль микро-младшего партнёра в конкретном продукте/сервисе на глобальном рынке. Помощь, советы, совместная работа — всё это возможно только когда есть что-то конкретное. Поэтому первый шаг всегда — выбор ниши (L1-1), а партнёрство — следствие. Вика должна «поставить задачу идти в сторону уверенности», после чего всё сложится. План Дениса: Вика выбирает нишу → тестирует → появляется уверенность → тогда партнёрство формализуется."
+                },
+                {
+                  "label": "Прямая речь",
+                  "quotes": [
+                    "«Я бы с удовольствием тебе помог, что-то совместное с тобой сделал, даже в роли микромладшего»",
+                    "«Я тебе точно помогу, подскажу, и у тебя будет и хорошая идея, и стратегия, и партнёр»",
+                    "«Пока нет уверенности, ну может как раз в ту сторону поставь себе задачу туда идти, набираться уверенности»"
+                  ]
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "Q3-1",
+                "type": "question",
+                "text": "Готова ли Вика взять Дениса в роли микро-младшего партнёра?",
+                "group": null,
+                "popup": null,
+                "hide_info_icon": true,
+                "children": [
+                  {
+                    "id": "T3-1",
+                    "type": "task",
+                    "text": "Вика формулирует решение по партнёрству с Денисом",
+                    "assignee": "Вика",
+                    "group": null,
+                    "popup": null,
+                    "hide_info_icon": true,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "B3-2",
+            "type": "constraint",
+            "text": "Пограничная самоуверенность — уверена по РФ, не уверена глобально",
+            "group": null,
+            "popup": {
+              "title": "Блокер: Пограничная уверенность в глобальном рынке",
+              "sections": [
+                {
+                  "label": "Суть",
+                  "content": "Вика уверена в себе на российском рынке, но по глобальному — уверенность пока «пограничная». Нужно дорастить через тестирование."
+                },
+                {
+                  "label": "Описание",
+                  "content": "Денис точно диагностирует разрыв: в России Вика «понимает, что готова всех порвать и порвёшь, если бы рынок был». Но на глобальном уровне — уверенность не достигла критической массы. Денис не давит: «пока нет уверенности, ну может как раз в ту сторону поставь себе задачу туда идти, набираться уверенности, когда она случится, ты точно там успешный продукт сделаешь». Решение — не ждать уверенности, не переезжать для вдохновения, а набирать её через конкретные тесты гипотез. Когда уверенность «случится» — всё «схлопнется» и путь станет очевиден."
+                },
+                {
+                  "label": "Прямая речь",
+                  "quotes": [
+                    "«Самоуверенность нужна. У тебя пока она немножко такая… пограничная. В России ты понимаешь, что ты готова всех порвать и порвешь, если бы рынок был же»",
+                    "«Если у тебя такая же случится уверенность о байк рынку, ну ты там порвешь, но тебе нужно дойти до этой уверенности, тогда схлопнется»",
+                    "«Пока нет уверенности, ну может как раз в ту сторону поставь себе задачу туда идти, набираться уверенности»"
+                  ]
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "D3-1",
+                "type": "decision",
+                "text": "Набираться уверенности через тестирование гипотез, не через переезд",
+                "group": null,
+                "popup": null,
+                "hide_info_icon": true,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L1-4",
+        "type": "condition",
+        "text": "Стратегия присутствия (где жить и работать) определена",
+        "group": {
+          "label": "Присутствие",
+          "color": "bg"
+        },
+        "popup": {
+          "title": "Условие: Стратегия присутствия",
+          "sections": [
+            {
+              "label": "Суть",
+              "content": "Решено: Москва до октября, потом 3 мес отдых за границей, потом возврат и финальный выбор."
+            },
+            {
+              "label": "Описание",
+              "content": "Денис убеждает не переезжать в Гонконг сейчас. Переезд сжигает 50% внутреннего ресурса на адаптацию, а гипотезы цифровые — прорабатываются из любой точки. План: до октября работать из Москвы, потом уехать на 3 месяца «в режиме отдыха, чтобы скорее зарядиться», вернуться и принять решение. Денис подчёркивает: это НЕ релокация, а именно отдых — «чтобы у тебя в голове не было» вопросов про переезд. После возвращения — «донастроишь, рефиксируешь, поймёшь, стреляет у тебя или не стреляет». В России при этом тоже есть возможности: суверенный AI создаёт нишу для тех, кто умеет работать с нейросетями."
+            },
+            {
+              "label": "Прямая речь",
+              "quotes": [
+                "«Переезд в Гонконг или в любую другую точку, чтобы там подумать, чем заниматься, ты сожжёшь силы, внутренний ресурс не меньше 50%»",
+                "«Начиная с России, всё равно это всё цифровое»",
+                "«Если это воспринимать как отдых — на три месяца съездила, действительно переключилась, вдохновилась»"
+              ]
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "B4-1",
+            "type": "constraint",
+            "text": "Соблазн переезда в Гонконг сжигает 50% внутреннего ресурса",
+            "group": null,
+            "popup": {
+              "title": "Блокер: Переезд сожжёт половину ресурса",
+              "sections": [
+                {
+                  "label": "Суть",
+                  "content": "Переезд в Гонконг для «подумать» — это минус 50% энергии на адаптацию, стресс и бытовой дискомфорт."
+                },
+                {
+                  "label": "Описание",
+                  "content": "Денис системно разбирает, почему переезд вреден на текущем этапе. Вика в Гонконге «точно не будет конкурсом продавать на улицах и на локальных встречах» — вся работа цифровая. Значит, находиться там для работы не нужно. А вот стресс от отсутствия привычной инфраструктуры (Яндекс.Лавки, медобслуживание) и энергия на обустройство — реальны. «Будет ли у тебя там стресс, будет ли тебе хреново от отсутствия Яндекс.Лавки и медицинского обслуживания». При этом мосты не сжигаются: если Вика останется в Москве, она ничего не теряет, а если уедет преждевременно — может потерять фокус."
+                },
+                {
+                  "label": "Прямая речь",
+                  "quotes": [
+                    "«Переезд в Гонконг или в любую другую точку, чтобы там подумать, чем заниматься, ты сожжёшь силы, внутренний ресурс не меньше 50%»",
+                    "«Будет ли у тебя там стресс, будет ли тебе хреново от отсутствия Яндекс.Лавки и медицинского обслуживания»",
+                    "«На то, чтобы тебе сидеть и всё равно работать дома, а не по встречам где-то в Гонконге, ну как будто не нужно»"
+                  ]
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "Q4-1",
+                "type": "question",
+                "text": "Переезжать сейчас или остаться и работать из Москвы?",
+                "group": null,
+                "popup": null,
+                "hide_info_icon": true,
+                "children": [
+                  {
+                    "id": "D4-1",
+                    "type": "decision",
+                    "text": "Остаться в Москве до октября — тестировать гипотезы",
+                    "group": null,
+                    "popup": {
+                      "title": "Решение: Москва до октября",
+                      "sections": [
+                        {
+                          "label": "Суть",
+                          "content": "Остаться в Москве до октября, работать из привычных условий, прорабатывать гипотезы глобального рынка."
+                        },
+                        {
+                          "label": "Описание",
+                          "content": "Денис выстраивает чёткий таймлайн: до октября — Москва, фокус на тестировании ниши. Потом — три месяца отъезда «в режиме отдыха», не в режиме релокации. Потом — возврат в Москву, рефлексия и финальный выбор. Логика: «не определишься, не почувствуешь, что вот это оно, и я туда all-in делаю» — значит, мосты не сожжены, ничего не потеряно. «Если не стреляет, ты как бы никакие мосты не сожгла, тебе не нужно там выживать». Это стратегия минимизации рисков при максимизации информации."
+                        },
+                        {
+                          "label": "Прямая речь",
+                          "quotes": [
+                            "«Запланируй себе, что ты до октября точно здесь и прорабатываешь рынок желательно глобальный»",
+                            "«Пока не определишься, не почувствуешь, что вот это оно, и я туда all-in делаю»",
+                            "«Если не стреляет, ты как бы никакие мосты не сожгла, тебе не нужно там выживать»"
+                          ]
+                        }
+                      ]
+                    },
+                    "children": []
+                  },
+                  {
+                    "id": "D4-2",
+                    "type": "decision",
+                    "text": "После октября — 3 мес отдых (не релокация!)",
+                    "group": null,
+                    "popup": {
+                      "title": "Решение: 3 месяца отдыха, не переезда",
+                      "sections": [
+                        {
+                          "label": "Суть",
+                          "content": "После октября — уехать на 3 месяца именно в режиме отдыха и вдохновения, не в режиме релокации."
+                        },
+                        {
+                          "label": "Описание",
+                          "content": "Принципиальная разница в фрейминге: это НЕ переезд, а отдых. Денис подчёркивает: «чтобы у тебя в голове не было, потому что ты будешь думать про переехать, у тебя много сомнений». Если воспринимать поездку как релокацию — сжигается энергия на бытовые вопросы. Если как отдых — «переключилась, вдохновилась, но ты там вдохновляешься, ты себя не загружаешь вопросами: а мне нужно переезжать, не нужно». После трёх месяцев — вернуться в Москву, «донастроить, рефиксировать» впечатления и спокойно принять решение."
+                        },
+                        {
+                          "label": "Прямая речь",
+                          "quotes": [
+                            "«Если это воспринимать как отдых — на три месяца съездила, действительно переключилась, вдохновилась»",
+                            "«Чтобы у тебя в голове не было, потому что ты будешь думать про переехать, у тебя много сомнений»",
+                            "«Вернёшься потом в Москву, донастроишь, отрефиксируешь это спокойно, в комфортных условиях привычных»"
+                          ]
+                        }
+                      ]
+                    },
+                    "children": []
+                  },
+                  {
+                    "id": "D4-3",
+                    "type": "decision",
+                    "text": "Переезд — только после выбора ниши и первых результатов",
+                    "group": null,
+                    "popup": {
+                      "title": "Решение: Переезд привязан к выбору ниши",
+                      "sections": [
+                        {
+                          "label": "Суть",
+                          "content": "Переезд разрешён только когда нишу выбрали и есть первые результаты. Страна определится нишей, а не наоборот."
+                        },
+                        {
+                          "label": "Описание",
+                          "content": "Денис формулирует закон: сначала ниша — потом локация. «Когда ты поймешь, что тебе нужно all-in вот в этот рынок, в эту нишу делать, там, возможно, и не Гонконг нужен будет как destination». Место определяется проектом, а не наоборот. Вика должна понять, «куда у тебя начнут стрелять» — какой именно worldwide-проект, и от этого решить, нужно ли переезжать и в какую страну. Это «максимально правильная стратегия», а все внутренние метания «сжигают ресурсы и вероятность того, что ты увидишь» правильный путь."
+                        },
+                        {
+                          "label": "Прямая речь",
+                          "quotes": [
+                            "«Когда ты поймешь, что тебе нужно all-in вот в этот рынок, в эту нишу делать, там, возможно, и не Гонконг нужен будет как destination»",
+                            "«Будешь понимать, нужно ли тебе куда-то переезжать, не нужно, и если нужно, в какую страну»",
+                            "«Вот это вот максимально правильная стратегия, а внутри какие у тебя будут мысли, они тебя прям сжигают, сжигают ресурсы»"
+                          ]
+                        }
+                      ]
+                    },
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "B4-2",
+            "type": "constraint",
+            "text": "В России ограничен доступ к западным AI (блокировки)",
+            "group": null,
+            "popup": {
+              "title": "Блокер: Ограничения AI в России — палка о двух концах",
+              "sections": [
+                {
+                  "label": "Суть",
+                  "content": "Блокировки западных AI в России создают неудобства, но одновременно открывают рынок для тех, кто умеет их обходить."
+                },
+                {
+                  "label": "Описание",
+                  "content": "Денис разворачивает ограничение в возможность. Суверенный AI и блокировки — это не минус для Вики, а плюс. Логика: «если бы нейронки были открыты, в России бы, скорее всего, сидели и не ввязывались люди на какие-то кастомные решения, ERP-шки, либо там твоя помощь. А поскольку это не работает, то куча всяких систем, которые просто повторяют то, что на Западе, потому что здесь закрыто». Люди, которым сложно — «захотят начать пользоваться, а у тебя эти все вопросы решены». Метафора Дениса: «продавать спасательные круги во время Титаника — это ещё более обыгранный бизнес»."
+                },
+                {
+                  "label": "Прямая речь",
+                  "quotes": [
+                    "«Суверенный ИИ будет и так далее, это наоборот одни сплошные плюсы для тебя»",
+                    "«Если бы нейронки были открыты, в России бы, скорее всего, сидели и не ввязывались люди на какие-то кастомные решения»",
+                    "«Продавать спасательные круги во время Титаника — это ещё более обыгранный бизнес»"
+                  ]
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "D4-4",
+                "type": "decision",
+                "text": "Ограничения = возможность: люди побегут за помощью",
+                "group": null,
+                "popup": {
+                  "title": "Решение: Конвертировать ограничения в сервис",
+                  "sections": [
+                    {
+                      "label": "Суть",
+                      "content": "Блокировки AI в России — не преграда, а рынок. Люди без навыков побегут к тем, у кого навыки есть."
+                    },
+                    {
+                      "label": "Описание",
+                      "content": "Денис выстраивает цепочку: суверенный AI → люди не могут пользоваться западными решениями → они «очнутся что им пизда» → «побегут учиться у кого-то похожего на тебя». У Вики все вопросы решены: серверы, ERP-шки, агенты. Люди будут просить «продать им спасательный круг». Это можно завернуть в сервис: «то, что у тебя есть, то, что можно выставить куда-то на продажу, либо к нам присоединяйся». Денис считает, что даже на западе он смог бы прикрутить уникальную ценность, которая делает невыгодным использование ChatGPT/Claude напрямую."
+                    },
+                    {
+                      "label": "Прямая речь",
+                      "quotes": [
+                        "«Люди будут, когда они очнутся, что им пизда. Они побегут учиться у кого-то похожего на тебя. И просить им продать спасательный круг»",
+                        "«У тебя эти все вопросы решены, поэтому заворачивай это просто в сервис, который можно выставить куда-то на продажу»",
+                        "«Я понял на своей системе, что к этим штукам, даже если на западе, людям было бы неэффективно и бессмысленно пользоваться напрямую клодом или Gemini, особенно бизнесов»"
+                      ]
+                    }
+                  ]
+                },
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "L1-5",
+        "type": "condition",
+        "text": "Контент-стратегия для глобального рынка запущена",
+        "group": {
+          "label": "Контент",
+          "color": "par"
+        },
+        "popup": {
+          "title": "Условие: Мультиязычная контент-стратегия",
+          "sections": [
+            {
+              "label": "Суть",
+              "content": "Не учить английский — использовать технологии авто-генерации контента на все языки одновременно."
+            },
+            {
+              "label": "Описание",
+              "content": "Денис категорически против изучения английского для контента. Аргументы: (1) «ты всё равно нормально ни за полгода, ни за год, ни за два не научишься нативно»; (2) даже если научится — «качество твоих роликов улучшится», но это всё равно одна шестая часть населения; (3) испаноязычный рынок может быть больше; (4) есть или скоро появятся автоматические переводчики, которые делают нативно. Правильный подход: делать контент сразу на ВСЕ языки с мимикой и голосом Вики. «Научись генерировать просто, чтобы было очень нативно, но с твоей мимикой, с твоими словами на всех языках». Можно даже превратить себя в аватара."
+            },
+            {
+              "label": "Прямая речь",
+              "quotes": [
+                "«Точно английский тебе не надо учить. Учить для блогерства — это точно тупиковое»",
+                "«Английская аудитория — это примерно пятая или шестая часть населения»",
+                "«Научись генерировать просто, чтобы было очень нативно, но с твоей мимикой, с твоими словами на всех языках»"
+              ]
+            }
+          ]
+        },
+        "children": [
+          {
+            "id": "B5-1",
+            "type": "constraint",
+            "text": "Английский не станет нативным — контент будет хуже",
+            "group": null,
+            "popup": {
+              "title": "Блокер: Ненативный английский испортит контент",
+              "sections": [
+                {
+                  "label": "Суть",
+                  "content": "Даже через 2 года английский не станет нативным. Вика не будет «охуенно выглядеть и себя чувствовать в кадре» — это снизит качество контента."
+                },
+                {
+                  "label": "Описание",
+                  "content": "Денис атакует идею изучения английского с нескольких фронтов: временные затраты огромны («ни за полгода, ни за год, ни за два не научишься нативно»), результат всё равно некачественный («работать это будет хуже»), и даже в лучшем случае охват всё равно ограничен одной шестой населения. А через три года технологии авто-перевода сделают изучение языка для контента бессмысленным. Вместо этого нужно фокусировать ресурс на то, что работает: авто-переводчики, генерация с мимикой, аватары. Английский для контент-маркетинга — «примерно как с переездом в Гонконг» — иллюзия прогресса."
+                },
+                {
+                  "label": "Прямая речь",
+                  "quotes": [
+                    "«Ты всё равно нормально ни за полгода, ни за год, ни за два не научишься нативно»",
+                    "«Ты не будешь охуенно выглядеть, ну, себя чувствовать в кадре, и поэтому работать это будет хуже»",
+                    "«Даже если бы это, допустим, ты упоролась бы и так сделала через три года, научилась свободно болтать, тебе это вообще нафиг не потребовалось бы»"
+                  ]
+                }
+              ]
+            },
+            "children": [
+              {
+                "id": "Q5-1",
+                "type": "question",
+                "text": "Учить английский или использовать технологии?",
+                "group": null,
+                "popup": null,
+                "hide_info_icon": true,
+                "children": [
+                  {
+                    "id": "D5-1",
+                    "type": "decision",
+                    "text": "Не учить английский — авто-переводчики решают",
+                    "group": null,
+                    "popup": {
+                      "title": "Решение: Авто-переводчики вместо изучения языка",
+                      "sections": [
+                        {
+                          "label": "Суть",
+                          "content": "Английский не нужен. Сейчас или через год появятся авто-переводчики, которые делают контент нативным на всех языках."
+                        },
+                        {
+                          "label": "Описание",
+                          "content": "Денис решает вопрос однозначно: «точно английский тебе не надо учить». Автоматические переводчики уже есть или «через год точно появятся». Ресурс на изучение языка — потерянное время. Вместо этого нужно научиться генерировать контент «очень нативно» с мимикой и словами Вики на всех языках. Можно «себя вообще в аватара превратить». Английская аудитория — только шестая часть населения, зачем ограничивать себя? Правильно — делать «сразу на все языки, для этого тебе английский не нужен»."
+                        },
+                        {
+                          "label": "Прямая речь",
+                          "quotes": [
+                            "«Точно английский тебе не надо учить. Учить для блогерства — это точно тупиковое»",
+                            "«Сейчас уже есть автоматические переводчики. А если нет, то через год точно появится»",
+                            "«Нафига себя ограничивать. Английская аудитория — это примерно пятая или шестая часть населения»"
+                          ]
+                        }
+                      ]
+                    },
+                    "children": []
+                  },
+                  {
+                    "id": "D5-2",
+                    "type": "decision",
+                    "text": "Контент сразу на ВСЕ языки (не только английский)",
+                    "group": null,
+                    "popup": {
+                      "title": "Решение: Мультиязычная генерация контента",
+                      "sections": [
+                        {
+                          "label": "Суть",
+                          "content": "Делать контент на все языки мира сразу, сохраняя мимику и голос Вики через AI-генерацию."
+                        },
+                        {
+                          "label": "Описание",
+                          "content": "Ключевой инсайт Дениса: рынок — не только англоязычный. Испаноязычный может быть больше. Поэтому стратегия — не учить один язык, а генерировать контент сразу на все. Технология: авто-перевод с сохранением мимики и голоса (lip-sync, voice cloning). Денис предлагает это как пайплайн, который нужно «отработать». Результат: Вика может обращаться к аудитории на любом языке «с твоей мимикой, с твоими словами», без необходимости знать этот язык."
+                        },
+                        {
+                          "label": "Прямая речь",
+                          "quotes": [
+                            "«Тебе нужно делать сразу же на все языки, для этого тебе английский не нужен»",
+                            "«Научись генерировать просто, чтобы было очень нативно, но с твоей мимикой, с твоими словами на всех языках»",
+                            "«Либо там себя вообще в аватара превратить. Это автоматический переводчик, генератор»"
+                          ]
+                        }
+                      ]
+                    },
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "B5-2",
+            "type": "constraint",
+            "text": "Нет настроенной системы мультиязычной генерации контента",
+            "group": null,
+            "popup": null,
+            "hide_info_icon": true,
+            "children": [
+              {
+                "id": "T5-1",
+                "type": "task",
+                "text": "Настроить авто-генерацию контента с мимикой Вики на все языки",
+                "assignee": "Вика",
+                "group": null,
+                "popup": null,
+                "hide_info_icon": true,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "id": "T1-1",
+      "assignee": "Вика",
+      "text": "Проработать 2-3 гипотезы ниш (испанский рынок, AI для бизнеса, суверенный AI)",
+      "context": "Монолог Дениса: обсуждение стратегии — куда направить AI-навыки Вики. Три направления: испаноязычный рынок, AI-сервисы для бизнеса, суверенный AI в России.",
+      "decision": "До октября тестировать гипотезы из Москвы, не отвлекаясь на переезд.",
+      "formulation": "Проработать 2-3 гипотезы ниш глобального рынка. 👤 Вика"
+    },
+    {
+      "id": "T2-1",
+      "assignee": "Вика",
+      "text": "Использовать год форы для захвата позиции на новом рынке",
+      "context": "Денис оценивает окно форы по AI-навыкам в ~1 год. Конкуренты догонят.",
+      "decision": "Максимально использовать временное преимущество для выхода на глобальный рынок.",
+      "formulation": "Использовать год форы для захвата позиции. 👤 Вика"
+    },
+    {
+      "id": "T3-1",
+      "assignee": "Вика",
+      "text": "Сформулировать решение по партнёрству с Денисом",
+      "context": "Денис предложил себя как микро-младшего партнёра, но ждёт конкретики от Вики.",
+      "decision": "Вика должна определиться с проектом, после чего сформулировать позицию по партнёрству.",
+      "formulation": "Сформулировать предварительное решение по партнёрству с Денисом. 👤 Вика"
+    },
+    {
+      "id": "T5-1",
+      "assignee": "Вика",
+      "text": "Настроить авто-генерацию контента с мимикой и голосом Вики на все языки",
+      "context": "Денис убеждает не учить английский, а использовать AI для мультиязычного контента.",
+      "decision": "Генерировать контент на все языки с мимикой и голосом Вики через авто-переводчики.",
+      "formulation": "Настроить систему мультиязычной генерации контента. 👤 Вика"
+    }
+  ]
+}</script>
+
+<script>
+// ================================================================
+// JS-ДВИЖОК GOAL TREE v2.1 — УНИВЕРСАЛЬНЫЙ + SIDEBAR MODULE v3
+// Changelog vs v2.0:
+//   - Sidebar поддерживает рекурсивную вложенность (renderSidebarItem)
+//   - Sidebar-дети с собственными children отображают мини-дерево
+// Changelog vs v1.1:
+//   - Sidebar крепится СПРАВА от карточки (position:absolute)
+//   - saveHtml() очищает DOM перед сохранением
+//   - Группа-контейнер только при 2+ горизонтальных детях
+// ================================================================
+
+var TYPE_MAP = {
+  'goal':       { cls: 'n-goal',   label: 'Цель' },
+  'condition':  { cls: 'n-cond',   label: 'Условие' },
+  'constraint': { cls: 'n-constr', label: 'Блокер' },
+  'question':   { cls: 'n-q',      label: 'Вопрос' },
+  'decision':   { cls: 'n-dec',    label: 'Решение' },
+  'task':       { cls: 'n-task',   label: 'Задача' },
+  'fact':       { cls: 'n-fact',   label: 'Факт' },
+  'note':       { cls: 'n-note',   label: 'Примечание' },
+  'risk':       { cls: 'n-risk',   label: 'Риск' }
+};
+
+var GROUP_COLOR_MAP = {
+  'crit': 'group-crit', 'par': 'group-par',
+  'bg': 'group-bg', 'accent': 'group-accent'
+};
+
+var BADGE_COLOR_MAP = {
+  'crit': 'badge-crit', 'par': 'badge-par',
+  'bg': 'badge-bg', 'accent': 'badge-accent'
+};
+
+var LEGEND_ITEMS = [
+  ['sw-goal','Цель'],['sw-cond','Условие'],['sw-constr','Блокер'],
+  ['sw-q','Вопрос'],['sw-dec','Решение'],['sw-task','Задача']
+];
+
+function el(tag, cls) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  return e;
+}
+
+// === Renders a single card element (reusable by renderNode and renderSidebarBlock) ===
+function renderCard(node) {
+  var ti = TYPE_MAP[node.type] || { cls: 'n-fact', label: node.type };
+  var card = el('div', 'card ' + ti.cls);
+  if (node.id) card.id = node.id;
+  if (node.hide_info_icon) card.classList.add('hide-info-icon');
+  var body = el('div', 'card-body');
+  var nt = el('div', 'node-type');
+  nt.textContent = ti.label;
+  body.appendChild(nt);
+  var ct = el('div', 'card-text');
+  ct.textContent = node.text;
+  body.appendChild(ct);
+  card.appendChild(body);
+  if (node.popup) {
+    var pb = el('div', 'popup-box');
+    var pt = el('div', 'popup-title');
+    pt.textContent = node.popup.title;
+    pb.appendChild(pt);
+    (node.popup.sections || []).forEach(function(s) {
+      var lbl = el('div', 'popup-label');
+      lbl.textContent = s.label;
+      pb.appendChild(lbl);
+      if (s.content) {
+        var p = el('p'); p.textContent = s.content; pb.appendChild(p);
+      }
+      if (s.quotes) {
+        s.quotes.forEach(function(q) {
+          var qe = el('div', 'popup-quote'); qe.textContent = q; pb.appendChild(qe);
+        });
+      }
+    });
+    card.appendChild(pb);
+  }
+  if (node.assignee) {
+    var footer = el('div', 'card-footer');
+    var badge = el('span', 'status-badge');
+    badge.textContent = node.assignee;
+    footer.appendChild(badge);
+    card.appendChild(footer);
+  }
+  return card;
+}
+
+// === Sidebar: auto-detect mode ===
+function getSidebarMode(node) {
+  if (node.sidebar && typeof node.sidebar === 'object' && node.sidebar.mode) return node.sidebar.mode;
+  if (!node.children || node.children.length === 0) return 'parallel';
+  var firstType = node.children[0].type;
+  var allSame = node.children.every(function(c) { return c.type === firstType; });
+  return allSame ? 'parallel' : 'chain';
+}
+
+// === Sidebar: render a single item recursively (card + optional subtree) ===
+function renderSidebarItem(node) {
+  var subtree = el('div', 'sb-subtree');
+  subtree.appendChild(renderCard(node));
+  if (node.children && node.children.length > 0) {
+    subtree.appendChild(el('div', 'sb-stem'));
+    var ch = el('div', 'sb-children');
+    node.children.forEach(function(child) {
+      ch.appendChild(renderSidebarItem(child));
+    });
+    subtree.appendChild(ch);
+  }
+  return subtree;
+}
+
+// === Sidebar: render compact block with recursive support ===
+function renderSidebarBlock(sidebarNode) {
+  var block = el('div', 'sidebar-block');
+  var mode = getSidebarMode(sidebarNode);
+  block.classList.add(mode === 'chain' ? 'sb-chain' : 'sb-parallel');
+  if (sidebarNode.group) {
+    block.classList.add('group');
+    if (sidebarNode.group.color && GROUP_COLOR_MAP[sidebarNode.group.color]) {
+      block.classList.add(GROUP_COLOR_MAP[sidebarNode.group.color]);
+    }
+    var gl = el('div', 'group-label');
+    gl.textContent = sidebarNode.group.label;
+    block.appendChild(gl);
+  }
+  // Root card of the sidebar node
+  var rootItem = el('div', 'sb-item');
+  rootItem.appendChild(renderCard(sidebarNode));
+  block.appendChild(rootItem);
+  // Children — rendered recursively (supports nested subtrees)
+  if (sidebarNode.children && sidebarNode.children.length > 0) {
+    sidebarNode.children.forEach(function(child) {
+      var item = el('div', 'sb-item');
+      item.appendChild(renderSidebarItem(child));
+      block.appendChild(item);
+    });
+  }
+  return block;
+}
+
+// === Main recursive renderer ===
+function renderNode(node, depth) {
+  if (typeof depth === 'undefined') depth = 0;
+  var branch = el('div', 'branch');
+
+  // --- Split children into sidebar vs main ---
+  var sidebarNodes = [];
+  var mainNodes = [];
+  (node.children || []).forEach(function(c) {
+    if (c.sidebar) sidebarNodes.push(c); else mainNodes.push(c);
+  });
+
+  // --- Group logic: container only when 2+ horizontal main children ---
+  var useGroupContainer = false;
+  if (node.group && !node.sidebar) {
+    useGroupContainer = mainNodes.length > 1;
+    if (useGroupContainer) {
+      branch.classList.add('group');
+      if (node.group.color && GROUP_COLOR_MAP[node.group.color]) {
+        branch.classList.add(GROUP_COLOR_MAP[node.group.color]);
+      }
+      var gl = el('div', 'group-label');
+      gl.textContent = node.group.label;
+      branch.appendChild(gl);
+    }
+  }
+
+  // --- Build the card ---
+  var card = renderCard(node);
+  // Group badge (compact label) when group exists but no container
+  if (node.group && !node.sidebar && !useGroupContainer) {
+    var gbadge = el('span', 'card-group-badge');
+    if (node.group.color && BADGE_COLOR_MAP[node.group.color]) {
+      gbadge.classList.add(BADGE_COLOR_MAP[node.group.color]);
+    }
+    gbadge.textContent = node.group.label;
+    card.querySelector('.card-body').insertBefore(gbadge, card.querySelector('.card-body').firstChild);
+  }
+
+  // --- Attach sidebar (if any) to the card via absolute positioning ---
+  if (sidebarNodes.length > 0) {
+    var sideRow = el('div', 'sidebar-row');
+    sideRow.appendChild(card);
+    var sideAttach = el('div', 'sidebar-attach');
+    sidebarNodes.forEach(function(sn) {
+      sideAttach.appendChild(el('div', 'sidebar-connector'));
+      sideAttach.appendChild(renderSidebarBlock(sn));
+    });
+    sideRow.appendChild(sideAttach);
+    branch.appendChild(sideRow);
+  } else {
+    branch.appendChild(card);
+  }
+
+  // --- Render main children (excluding sidebar nodes) ---
+  var childrenToRender = sidebarNodes.length > 0 ? mainNodes : (node.children || []);
+
+  if (childrenToRender.length > 0) {
+    branch.appendChild(el('div', 'stem'));
+    var canCollapse = childrenToRender.length > 1 && node.type !== 'goal';
+
+    if (canCollapse) {
+      var wrap = el('div', 'collapse-wrap');
+      var btn = el('button', 'collapse-btn is-expanded');
+      btn.innerHTML = '<span class="arrow">&#9654;</span> <span class="label">Свернуть (' + childrenToRender.length + ')</span>';
+      wrap.appendChild(btn);
+      var ch = el('div', 'children');
+      childrenToRender.forEach(function(c) { ch.appendChild(renderNode(c, depth + 1)); });
+      wrap.appendChild(ch);
+      var summary = el('div', 'collapsed-summary');
+      var TYPE_SHORT = {goal:'Ц',condition:'У',constraint:'Б',question:'В',decision:'Р',task:'З',fact:'Ф'};
+      var TYPE_CLS = {condition:'ci-cond',constraint:'ci-constr',decision:'ci-dec',task:'ci-task',question:'ci-q'};
+      childrenToRender.forEach(function(c) {
+        var item = el('div', 'collapsed-item');
+        var typeSpan = '<span class="ci-type ' + (TYPE_CLS[c.type]||'ci-other') + '">' + (TYPE_SHORT[c.type]||'?') + '</span>';
+        item.innerHTML = typeSpan + c.text;
+        summary.appendChild(item);
+      });
+      wrap.appendChild(summary);
+      branch.appendChild(wrap);
+    } else {
+      var ch = el('div', 'children');
+      childrenToRender.forEach(function(c) { ch.appendChild(renderNode(c, depth + 1)); });
+      branch.appendChild(ch);
+    }
+  }
+
+  return branch;
+}
+
+function renderTaskBoard(tasks) {
+  var board = el('div', 'task-board');
+  var h2 = el('h2'); h2.textContent = 'Доска задач'; board.appendChild(h2);
+  tasks.forEach(function(task) {
+    var item = el('div', 'task-item');
+    item.setAttribute('data-task-id', task.id);
+    var lbl = el('label', 'task-check');
+    var cb = el('input'); cb.type = 'checkbox'; cb.className = 'task-checkbox';
+    lbl.appendChild(cb); item.appendChild(lbl);
+    var asgn = el('span', 'task-assignee'); asgn.textContent = task.assignee; item.appendChild(asgn);
+    var txt = el('span', 'task-text'); txt.textContent = task.text; item.appendChild(txt);
+    if (task.context || task.decision || task.formulation) {
+      var pop = el('div', 'task-popup');
+      var html = '';
+      if (task.context) html += '<div class="p-sec"><strong>Контекст</strong>' + task.context + '</div>';
+      if (task.decision) html += '<div class="p-sec"><strong>Решение</strong>' + task.decision + '</div>';
+      if (task.formulation) html += '<div class="p-sec"><strong>Формулировка</strong>' + task.formulation + '</div>';
+      pop.innerHTML = html;
+      item.appendChild(pop);
+    }
+    board.appendChild(item);
+  });
+  return board;
+}
+
+function renderLegend() {
+  var root = document.getElementById('legend-root');
+  root.innerHTML = LEGEND_ITEMS.map(function(i) {
+    return '<div class="legend-item"><div class="legend-swatch ' + i[0] + '"></div>' + i[1] + '</div>';
+  }).join('');
+}
+
+function renderAll(data) {
+  document.getElementById('page-title').textContent = data.meta.title;
+  document.title = data.meta.title;
+  document.getElementById('page-subtitle').textContent =
+    data.meta.subtitle + ' \u00b7 v' + data.meta.version + ' \u00b7 ' + data.meta.date;
+  var tr = document.getElementById('tree-root');
+  tr.innerHTML = '';
+  tr.appendChild(renderNode(data.tree));
+  var tbr = document.getElementById('taskboard-root');
+  tbr.innerHTML = '';
+  if (data.tasks && data.tasks.length > 0) tbr.appendChild(renderTaskBoard(data.tasks));
+  renderLegend();
+  initTaskBoard();
+  initCollapse();
+  var cab = document.getElementById('collapse-all-btn');
+  cab.style.display = document.querySelectorAll('.collapse-btn').length > 0 ? 'flex' : 'none';
+  cab.textContent = '\u229F Свернуть все ветки';
+  cab.setAttribute('data-state', 'expanded');
+}
+
+function showPopup(overlay, clone, anchorRect) {
+  var bd = document.createElement('div');
+  bd.className = 'popup-backdrop';
+  overlay.appendChild(bd);
+  overlay.appendChild(clone);
+  overlay.classList.add('visible');
+  var pw = clone.offsetWidth;
+  var ph = clone.offsetHeight;
+  var left = anchorRect.left + anchorRect.width / 2 - pw / 2;
+  if (left < 10) left = 10;
+  if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
+  var top = anchorRect.bottom + 8;
+  if (top + ph > window.innerHeight - 10) top = anchorRect.top - ph - 8;
+  if (top < 10) top = 10;
+  clone.style.left = left + 'px';
+  clone.style.top = top + 'px';
+}
+
+function closePopup() {
+  var overlay = document.getElementById('popup-overlay');
+  overlay.innerHTML = '';
+  overlay.classList.remove('visible');
+}
+
+function initPopups() {
+  var overlay = document.getElementById('popup-overlay');
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.popup-clone')) return;
+    closePopup();
+    var card = e.target.closest('.card');
+    if (!card) return;
+    var box = card.querySelector('.popup-box');
+    if (!box) return;
+    var clone = box.cloneNode(true);
+    clone.style.cssText = 'display:block !important';
+    clone.classList.add('popup-clone');
+    showPopup(overlay, clone, card.getBoundingClientRect());
+  });
+}
+
+function initTaskBoard() {
+  document.querySelectorAll('.task-text').forEach(function(t) {
+    t.addEventListener('click', function(e) {
+      e.stopPropagation();
+      closePopup();
+      var overlay = document.getElementById('popup-overlay');
+      var item = this.closest('.task-item');
+      var pop = item.querySelector('.task-popup');
+      if (!pop) return;
+      var clone = pop.cloneNode(true);
+      clone.style.cssText = 'display:block !important';
+      clone.classList.add('popup-clone');
+      var title = el('div', 'popup-title');
+      title.textContent = item.querySelector('.task-text').textContent;
+      clone.insertBefore(title, clone.firstChild);
+      showPopup(overlay, clone, item.getBoundingClientRect());
+    });
+  });
+}
+
+function toggleCollapseBtn(btn, forceCollapse) {
+  var wrap = btn.closest('.collapse-wrap');
+  if (!wrap) return;
+  var ch = wrap.querySelector(':scope > .children');
+  var summary = wrap.querySelector(':scope > .collapsed-summary');
+  if (!ch || !summary) return;
+  var isExpanded = btn.classList.contains('is-expanded');
+  var shouldCollapse = (typeof forceCollapse !== 'undefined') ? forceCollapse : isExpanded;
+  if (shouldCollapse) {
+    ch.classList.add('collapsed');
+    summary.classList.add('visible');
+    btn.classList.remove('is-expanded');
+    btn.classList.add('is-collapsed');
+    btn.querySelector('.label').textContent = 'Развернуть (' + ch.children.length + ')';
+  } else {
+    ch.classList.remove('collapsed');
+    summary.classList.remove('visible');
+    btn.classList.remove('is-collapsed');
+    btn.classList.add('is-expanded');
+    btn.querySelector('.label').textContent = 'Свернуть (' + ch.children.length + ')';
+  }
+}
+
+function initCollapse() {
+  document.querySelectorAll('.collapse-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleCollapseBtn(this);
+    });
+  });
+}
+
+function showStatus(msg, type) {
+  var s = document.getElementById('load-status');
+  s.textContent = msg;
+  s.className = 'load-status ' + type;
+  setTimeout(function() { s.className = 'load-status'; }, 3000);
+}
+
+function handleFileLoad(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(evt) {
+    var content = evt.target.result;
+    var json;
+    try {
+      var match = content.match(/```json\s*([\s\S]*?)\s*```/);
+      json = JSON.parse(match ? match[1] : content);
+    } catch(err) {
+      showStatus('Ошибка JSON: ' + err.message, 'err');
+      return;
+    }
+    document.getElementById('tree-data').textContent = JSON.stringify(json, null, 2);
+    renderAll(json);
+    showStatus('\u2713 Загружено: ' + file.name, 'ok');
+    document.getElementById('save-btn').style.display = 'flex';
+  };
+  reader.readAsText(file, 'UTF-8');
+  e.target.value = '';
+}
+
+// === Save HTML — CLEAN: strips rendered DOM to prevent legacy HTML contamination ===
+function saveHtml() {
+  var clone = document.documentElement.cloneNode(true);
+  // Strip all dynamically rendered content — only JSON stays
+  clone.querySelector('#tree-root').innerHTML = '';
+  clone.querySelector('#taskboard-root').innerHTML = '';
+  clone.querySelector('#popup-overlay').innerHTML = '';
+  clone.querySelector('#legend-root').innerHTML = '';
+  clone.querySelector('#collapse-all-btn').style.display = 'none';
+  clone.querySelector('#save-btn').style.display = 'none';
+  var html = clone.outerHTML;
+  var blob = new Blob(['<!DOCTYPE html>\n' + html], { type: 'text/html;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var title = document.getElementById('page-title').textContent || 'goal_tree';
+  a.href = url;
+  a.download = title.replace(/[^\w\u0400-\u04ff\s-]/g, '').replace(/\s+/g, '_') + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showStatus('\u2713 HTML сохранён', 'ok');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  initPopups();
+  document.getElementById('file-input').addEventListener('change', handleFileLoad);
+  document.getElementById('load-btn').addEventListener('click', function() {
+    document.getElementById('file-input').click();
+  });
+  document.getElementById('collapse-all-btn').addEventListener('click', function() {
+    var state = this.getAttribute('data-state');
+    var btns = document.querySelectorAll('.collapse-btn');
+    if (state === 'expanded') {
+      btns.forEach(function(btn) { toggleCollapseBtn(btn, true); });
+      this.textContent = '\u229E Развернуть все ветки';
+      this.setAttribute('data-state', 'collapsed');
+    } else {
+      btns.forEach(function(btn) { toggleCollapseBtn(btn, false); });
+      this.textContent = '\u229F Свернуть все ветки';
+      this.setAttribute('data-state', 'expanded');
+    }
+  });
+  document.getElementById('save-btn').addEventListener('click', saveHtml);
+  var raw = document.getElementById('tree-data').textContent.trim();
+  if (raw) {
+    try {
+      renderAll(JSON.parse(raw));
+      document.getElementById('save-btn').style.display = 'flex';
+    } catch(e) { console.error('JSON parse error:', e); }
+  }
+});
+</script>
+
+
+</body></html>
